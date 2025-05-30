@@ -1,4 +1,5 @@
 # lib/employee.py
+
 from __init__ import CURSOR, CONN
 from department import Department
 
@@ -11,6 +12,9 @@ class Employee:
         self.job_title = job_title
         self.department_id = department_id
 
+        if id:
+            Employee.all[id] = self
+
     def __repr__(self):
         return f"<Employee {self.id}: {self.name}, {self.job_title}>"
 
@@ -19,9 +23,9 @@ class Employee:
         sql = """
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY,
-                name TEXT,
-                job_title TEXT,
-                department_id INTEGER,
+                name TEXT NOT NULL,
+                job_title TEXT NOT NULL,
+                department_id INTEGER NOT NULL,
                 FOREIGN KEY (department_id) REFERENCES departments(id)
             )
         """
@@ -30,22 +34,23 @@ class Employee:
 
     @classmethod
     def drop_table(cls):
-        sql = "DROP TABLE IF EXISTS employees"
-        CURSOR.execute(sql)
+        CURSOR.execute("DROP TABLE IF EXISTS employees")
         CONN.commit()
 
     def save(self):
         if self.id is None:
-            sql = """
+            CURSOR.execute(
+                """
                 INSERT INTO employees (name, job_title, department_id)
                 VALUES (?, ?, ?)
-            """
-            CURSOR.execute(sql, (self.name, self.job_title, self.department_id))
-            CONN.commit()
+                """,
+                (self.name, self.job_title, self.department_id)
+            )
             self.id = CURSOR.lastrowid
             Employee.all[self.id] = self
         else:
             self.update()
+        CONN.commit()
 
     @classmethod
     def create(cls, name, job_title, department_id):
@@ -55,43 +60,40 @@ class Employee:
 
     @classmethod
     def instance_from_db(cls, row):
-        employee_id = row[0]
+        employee_id, name, job_title, department_id = row
         if employee_id in cls.all:
             instance = cls.all[employee_id]
-            instance.name = row[1]
-            instance.job_title = row[2]
-            instance.department_id = row[3]
-            return instance
+            instance.name = name
+            instance.job_title = job_title
+            instance.department_id = department_id
         else:
-            instance = cls(row[1], row[2], row[3], id=employee_id)
+            instance = cls(name, job_title, department_id, id=employee_id)
             cls.all[employee_id] = instance
-            return instance
+        return instance
 
     @classmethod
     def find_by_id(cls, id):
-        sql = "SELECT * FROM employees WHERE id = ?"
-        CURSOR.execute(sql, (id,))
+        CURSOR.execute("SELECT * FROM employees WHERE id = ?", (id,))
         row = CURSOR.fetchone()
-        if row:
-            return cls.instance_from_db(row)
-        return None
+        return cls.instance_from_db(row) if row else None
 
     def update(self):
-        if self.id is None:
-            raise Exception("Cannot update Employee without id")
-        sql = """
+        if not self.id:
+            raise Exception("Cannot update employee without an ID.")
+        CURSOR.execute(
+            """
             UPDATE employees
             SET name = ?, job_title = ?, department_id = ?
             WHERE id = ?
-        """
-        CURSOR.execute(sql, (self.name, self.job_title, self.department_id, self.id))
+            """,
+            (self.name, self.job_title, self.department_id, self.id)
+        )
         CONN.commit()
 
     def delete(self):
-        if self.id is None:
-            raise Exception("Cannot delete Employee without id")
-        sql = "DELETE FROM employees WHERE id = ?"
-        CURSOR.execute(sql, (self.id,))
+        if not self.id:
+            raise Exception("Cannot delete employee without an ID.")
+        CURSOR.execute("DELETE FROM employees WHERE id = ?", (self.id,))
         CONN.commit()
         if self.id in Employee.all:
             del Employee.all[self.id]
@@ -99,16 +101,19 @@ class Employee:
 
     @classmethod
     def get_all(cls):
-        sql = "SELECT * FROM employees"
-        CURSOR.execute(sql)
+        CURSOR.execute("SELECT * FROM employees")
         rows = CURSOR.fetchall()
         return [cls.instance_from_db(row) for row in rows]
 
     def reviews(self):
         from review import Review  # Avoid circular import
-        sql = "SELECT * FROM reviews WHERE employee_id = ?"
-        CURSOR.execute(sql, (self.id,))
+        CURSOR.execute("SELECT * FROM reviews WHERE employee_id = ?", (self.id,))
         rows = CURSOR.fetchall()
         return [Review.instance_from_db(row) for row in rows]
+    @classmethod
+    def find_by_name(cls, name):
+        sql = "SELECT * FROM employees WHERE name = ?"
+        CURSOR.execute(sql, (name,))
+        row = CURSOR.fetchone()
+        return cls.instance_from_db(row) if row else None
 
-    
