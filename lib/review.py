@@ -12,6 +12,29 @@ class Review:
         self.summary = summary
         self.employee_id = employee_id
 
+    def __repr__(self):
+        return f"<Review {self.id}: {self.year} - {self.summary[:20]}... for Employee {self.employee_id}>"
+
+    @classmethod
+    def create_table(cls):
+        sql = '''
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY,
+            year INTEGER,
+            summary TEXT,
+            employee_id INTEGER,
+            FOREIGN KEY (employee_id) REFERENCES employees(id)
+        )
+        '''
+        CURSOR.execute(sql)
+        CONN.commit()
+
+    @classmethod
+    def drop_table(cls):
+        sql = 'DROP TABLE IF EXISTS reviews'
+        CURSOR.execute(sql)
+        CONN.commit()
+
     def save(self):
         if self.id is None:
             sql = '''
@@ -81,6 +104,7 @@ class Review:
         CURSOR.execute(sql)
         rows = CURSOR.fetchall()
         return [cls.instance_from_db(row) for row in rows]
+
     @property
     def year(self):
         return self._year
@@ -107,10 +131,9 @@ class Review:
 
     @employee_id.setter
     def employee_id(self, value):
-        # You should check the employee_id exists in employees table
+        # Check the employee_id exists in employees table
         sql = 'SELECT id FROM employees WHERE id = ?'
         CURSOR.execute(sql, (value,))
         if CURSOR.fetchone() is None:
             raise ValueError(f"employee_id {value} does not exist in employees table")
         self._employee_id = value
-
